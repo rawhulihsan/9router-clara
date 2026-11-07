@@ -1,4 +1,5 @@
 import "open-sse/index.js";
+import { resolvePromptInjection } from "@/lib/promptInjection.js";
 
 import {
   getProviderCredentials,
@@ -98,6 +99,9 @@ export async function handleChat(request, clientRawRequest = null) {
   const keyAccess = await getKeyAccessContext(request);
   const keyAccessDenied = await enforceKeyAccess(keyAccess, modelStr);
   if (keyAccessDenied) return keyAccessDenied;
+
+  // Apply once before combo expansion/retries: requested identity owns the scope.
+  body = await resolvePromptInjection(body, new URL(request.url).pathname, Object.fromEntries(request.headers));
 
   // Bypass naming/warmup requests before combo rotation to avoid wasting rotation slots
   const userAgent = request?.headers?.get("user-agent") || "";
