@@ -101,7 +101,7 @@ export async function handleChat(request, clientRawRequest = null) {
   if (keyAccessDenied) return keyAccessDenied;
 
   // Apply once before combo expansion/retries: requested identity owns the scope.
-  body = await resolvePromptInjection(body, new URL(request.url).pathname, Object.fromEntries(request.headers));
+  body = await resolvePromptInjection(body, new URL(request.url).pathname + new URL(request.url).search, Object.fromEntries(request.headers));
 
   // Bypass naming/warmup requests before combo rotation to avoid wasting rotation slots
   const userAgent = request?.headers?.get("user-agent") || "";

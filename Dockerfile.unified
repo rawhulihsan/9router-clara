@@ -1,0 +1,13 @@
+ARG BASE_IMAGE=decolua/9router:latest
+FROM ${BASE_IMAGE}
+USER root
+COPY .next/standalone /app/
+COPY .next/static /app/.next/static
+COPY public /app/public
+COPY custom-server.js prompt-injection-front.cjs /app/
+COPY open-sse /app/open-sse
+COPY src/mitm /app/src/mitm
+# Cloud build uses glibc; use native Node SQLite on Alpine, never sql.js.
+RUN rm -rf /app/node_modules/better-sqlite3
+ENV PORT=20130
+CMD ["node", "custom-server.js"]
