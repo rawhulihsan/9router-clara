@@ -235,7 +235,8 @@ function getContentBlocksFromMessage(msg, toolNameMap = new Map()) {
     blocks.push({
       type: CLAUDE_BLOCK.TOOL_RESULT,
       tool_use_id: msg.tool_call_id,
-      content: convertToolResultContent(msg.content)
+      content: convertToolResultContent(msg.content),
+      is_error: Boolean(msg.is_error)
     });
   } else if (msg.role === ROLE.USER) {
     if (typeof msg.content === "string") {
@@ -251,7 +252,7 @@ function getContentBlocksFromMessage(msg, toolNameMap = new Map()) {
             type: CLAUDE_BLOCK.TOOL_RESULT,
             tool_use_id: part.tool_use_id,
             content: part.content,
-            ...(part.is_error && { is_error: part.is_error })
+            is_error: Boolean(part.is_error)
           });
         } else if (part.type === OPENAI_BLOCK.IMAGE_URL) {
           const url = part.image_url.url;

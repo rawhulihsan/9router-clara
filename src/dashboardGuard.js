@@ -211,6 +211,19 @@ export const __test__ = {
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
 
+  // Injection resolver authenticates only its private capability, never dashboard cookies.
+  if (pathname === "/api/prompt-injection/resolve") {
+    const { isInternalInjectionRequest } = await import("@/lib/promptInjection.js");
+    return isInternalInjectionRequest(request) ? NextResponse.next() : NextResponse.json({error:"Not found"},{status:404});
+  }
+  if (pathname === "/api/prompt-injection" || pathname.startsWith("/api/prompt-injection/")) {
+    const { injectionAuthorized } = await import("@/lib/promptInjection.js");
+    try {
+      if (await injectionAuthorized(request)) return NextResponse.next();
+    } catch {}
+    return NextResponse.json({error:"Unauthorized"},{status:401});
+  }
+
   // Local-only gate for spawn-capable / host-secret routes.
   if (LOCAL_ONLY_PATHS.some((p) => pathname.startsWith(p))) {
     if (!(await canAccessLocalOnlyRoute(request))) {

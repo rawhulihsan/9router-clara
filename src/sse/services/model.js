@@ -9,12 +9,10 @@ const LOCAL_PROVIDER_ALIASES = {
   "xiaomi-tokenplan": "xiaomi-tokenplan",
 };
 
-const RESERVED_PROVIDER_PREFIXES = new Set(Object.keys(LOCAL_PROVIDER_ALIASES));
-for (const entry of REGISTRY) {
-  RESERVED_PROVIDER_PREFIXES.add(entry.id);
-  if (entry.alias) RESERVED_PROVIDER_PREFIXES.add(entry.alias);
-  for (const alias of entry.aliases || []) RESERVED_PROVIDER_PREFIXES.add(alias);
-}
+const RESERVED_PROVIDER_PREFIXES = new Set([
+  ...Object.values(LOCAL_PROVIDER_ALIASES),
+  ...REGISTRY.map((entry) => entry.id),
+]);
 
 export function parseModel(modelStr) {
   const parsed = parseModelCore(modelStr);
@@ -39,8 +37,8 @@ export async function getModelInfo(modelStr) {
   const parsed = parseModel(modelStr);
 
   if (!parsed.isAlias) {
-    // Provider-node prefixes are user-defined. They must not override built-in
-    // provider ids/aliases such as `cf`, `cloudflare-ai`, `openai`, or `hf`.
+    // Exact configured prefixes beat built-in aliases; full built-in provider
+    // ids stay reserved so callers can explicitly select the native provider.
     if (!RESERVED_PROVIDER_PREFIXES.has(parsed.providerAlias)) {
       const openaiNodes = await getProviderNodes({ type: "openai-compatible" });
       const matchedOpenAI = openaiNodes.find((node) => node.prefix === parsed.providerAlias);
