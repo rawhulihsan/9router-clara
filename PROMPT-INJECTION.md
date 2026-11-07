@@ -1,5 +1,15 @@
 # Prompt Injection fork
 
+## Current deployment: unified
+
+Production now runs ONLY `9router-unified` (`9router-unified:final`), internal port 20130; stable client endpoint remains 20128 via `9router-unified-routing.service`. Old `9router` and `9router-injection` are stopped with restart disabled; their disks remain backups, NOT hot rollback targets. Temporary handoff container removed after graceful drain. Current data directory `/opt/9router-docker/unified-data`; root-only environment `/opt/9router-docker/unified.env`.
+
+Docker Cloud Sandbox built and tested artifact; sandbox deleted afterward. Custom prefix `th` now resolves configured custom provider before built-in alias. Real `th/deepseek-v4.1-flash:free` request returned HTTP 200; provider account fallback handled one upstream 429. Real injected completion and SSE passed; test injection removed. Snapshot integrity OK; migrated 77 provider connections, 7 provider nodes, 2 API keys, 4 combos, 1 injection-config row. Handoff health probe: 24/24 HTTP 200, longest response 5.613s while requests queued. This is measured zero errors, not a guarantee against every client timeout. Reboot not exercised. Native Gemini TTS bypass and stored-alias prefix path remain unverified limitations outside tested chat path.
+
+Do NOT run the legacy rollback command below: those instructions describe the previous topology. Current rollback requires queuing and draining unified traffic, freezing its writer and transferring latest state; restarting stale old databases can lose new state and invalidate rotating OAuth tokens.
+
+## Previous topology (historical, not active)
+
 Based on upstream v0.5.112. Dashboard: `/dashboard/prompt-injection`.
 
 Supports global, API-key, model/combo and key+model targets; single system prepend/append or alternating user/assistant script. Disabled entries do not apply. Backups include injection config.
