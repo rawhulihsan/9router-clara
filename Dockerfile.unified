@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=decolua/9router:latest
+ARG BASE_IMAGE=decolua/9router:0.5.119
 FROM ${BASE_IMAGE}
 USER root
 COPY .next/standalone /app/
