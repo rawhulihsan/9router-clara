@@ -85,6 +85,7 @@ export async function exportDb() {
     customModels: [],
     mitmAlias: {},
     pricing: {},
+    promptInjections: {},
   };
 
   for (const r of db.all(`SELECT key, value FROM kv WHERE scope = 'modelAliases'`)) out.modelAliases[r.key] = parseJson(r.value);
@@ -92,6 +93,7 @@ export async function exportDb() {
   for (const r of db.all(`SELECT key, value FROM kv WHERE scope = 'mitmAlias'`)) out.mitmAlias[r.key] = parseJson(r.value);
   for (const r of db.all(`SELECT key, value FROM kv WHERE scope = 'pricing'`)) out.pricing[r.key] = parseJson(r.value);
 
+  for (const r of db.all(`SELECT key, value FROM kv WHERE scope = 'promptInjections'`)) out.promptInjections[r.key] = parseJson(r.value);
   return out;
 }
 
@@ -109,7 +111,7 @@ export async function importDb(payload) {
     db.run(`DELETE FROM proxyPools`);
     db.run(`DELETE FROM apiKeys`);
     db.run(`DELETE FROM combos`);
-    db.run(`DELETE FROM kv WHERE scope IN ('modelAliases', 'customModels', 'mitmAlias', 'pricing')`);
+    db.run(`DELETE FROM kv WHERE scope IN ('modelAliases', 'customModels', 'mitmAlias', 'pricing', 'promptInjections')`);
 
     // Settings
     if (payload.settings) {
@@ -167,6 +169,9 @@ export async function importDb(payload) {
     }
     for (const [tool, mappings] of Object.entries(payload.mitmAlias || {})) {
       db.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('mitmAlias', ?, ?)`, [tool, stringifyJson(mappings || {})]);
+    }
+    for (const [key, value] of Object.entries(payload.promptInjections || {})) {
+      db.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('promptInjections', ?, ?)`, [key, stringifyJson(value)]);
     }
     for (const [provider, models] of Object.entries(payload.pricing || {})) {
       db.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('pricing', ?, ?)`, [provider, stringifyJson(models || {})]);

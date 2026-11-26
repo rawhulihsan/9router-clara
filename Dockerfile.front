@@ -1,0 +1,9 @@
+ARG BASE_IMAGE=9router:rollback-0.5.112
+FROM ${BASE_IMAGE}
+USER root
+COPY .next/standalone /app/
+COPY .next/static /app/.next/static
+COPY public /app/public
+COPY custom-server.js prompt-injection-front.cjs /app/
+ENV DISABLE_BACKGROUND_TOKEN_REFRESH=true
+CMD ["node", "custom-server.js"]

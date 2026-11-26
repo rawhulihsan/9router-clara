@@ -5,6 +5,21 @@ const crypto = require("crypto");
 const { pathToFileURL } = require("url");
 
 const origCreate = http.createServer.bind(http);
+const frontUpstream = process.env.PROMPT_INJECTION_UPSTREAM;
+if (frontUpstream) {
+  // Never let a front process run provider refresh/bootstrap or default to blue's DB.
+  if (!process.env.JWT_SECRET || !process.env.DATA_DIR || !path.isAbsolute(process.env.DATA_DIR)) {
+    throw new Error('Front mode requires explicit JWT_SECRET and isolated absolute DATA_DIR');
+  }
+  const marker = path.join(process.env.DATA_DIR, '.prompt-injection-front');
+  fs.mkdirSync(process.env.DATA_DIR, { recursive: true });
+  if (!fs.existsSync(marker) && fs.readdirSync(process.env.DATA_DIR).length) {
+    throw new Error('Front DATA_DIR must be empty on first start; never clone provider credentials');
+  }
+  fs.writeFileSync(marker, 'Front-only data; never copy provider credentials here.\n', { mode: 0o600 });
+  global.__appBootstrapped = true;
+  process.env.PROMPT_INJECTION_INTERNAL_TOKEN = crypto.randomBytes(32).toString('hex');
+}
 
 // Per-process secret proving x-9r-real-ip was stamped below rather than sent by the client.
 // A bare `next start` / `next dev` never loads this file, so it cannot produce a matching
@@ -53,6 +68,37 @@ http.createServer = (...args) => {
   const handler = args.find((a) => typeof a === "function");
   const rest = args.filter((a) => typeof a !== "function");
   if (!handler) return origCreate(...args);
+  let front;
+  let internal;
+  if (frontUpstream) {
+    // Private listener invokes only compiled resolver, never public dashboard routes.
+    internal = origCreate((req, res) => {
+      if (req.url !== '/api/prompt-injection/resolve' || req.headers['x-9r-injection-internal-token'] !== process.env.PROMPT_INJECTION_INTERNAL_TOKEN) {
+        res.writeHead(404); res.end(); return;
+      }
+      handler(req, res);
+    });
+    const ready = new Promise((resolve, reject) => {
+      internal.once('error', reject);
+      internal.listen(0, '127.0.0.1', () => resolve(internal.address().port));
+    });
+    front = require('./prompt-injection-front.cjs').createFront({
+      upstream: frontUpstream,
+      transform: async (body, req) => {
+        const port = await ready;
+        const response = await fetch(`http://127.0.0.1:${port}/api/prompt-injection/resolve`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-9r-injection-internal-token': process.env.PROMPT_INJECTION_INTERNAL_TOKEN },
+          body: JSON.stringify({ path: req.url, body, headers: { authorization: req.headers.authorization, 'x-api-key': req.headers['x-api-key'], 'x-goog-api-key': req.headers['x-goog-api-key'] } }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!response.ok) throw new Error('Injection resolver unavailable');
+        const result = await response.json();
+        if (!result.body || typeof result.body !== 'object') throw new Error('Invalid injection resolver response');
+        return result.body;
+      },
+    });
+  }
   const wrapped = (req, res) => {
     const socketIp = req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : "";
     const xff = req.headers["x-forwarded-for"];
@@ -70,11 +116,13 @@ http.createServer = (...args) => {
     req.headers["x-9r-real-ip"] = ip;
     req.headers["x-9r-peer-token"] = PEER_TOKEN;
     if (viaProxy) req.headers["x-9r-via-proxy"] = "1";
-    return handler(req, res);
+    delete req.headers['x-9r-injection-internal-token'];
+    return front ? front(req, res, () => handler(req, res)) : handler(req, res);
   };
   const server = origCreate(...rest, wrapped);
+  if (internal) server.once('close', () => { internal.closeAllConnections(); internal.close(); });
   server.once("listening", () => {
-    startBackgroundTokenRefreshFromCustomServer();
+    if (!frontUpstream) startBackgroundTokenRefreshFromCustomServer();
   });
   const origEmit = server.emit;
   // JBR 25 sends h2c upgrades that the HTTP/1.1 server would otherwise close.
@@ -85,7 +133,7 @@ http.createServer = (...args) => {
     }
 
     const contentLength = Number(req.headers["content-length"] || 0);
-    if (!Number.isSafeInteger(contentLength) || contentLength < 0) {
+    if (!Number.isSafeInteger(contentLength) || contentLength < 0 || (frontUpstream && contentLength > 4 * 1024 * 1024)) {
       socket.destroy();
       return true;
     }
